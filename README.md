@@ -36,7 +36,11 @@ row (see Screen).
 **Triggering.** Each slot runs its own loop, independent of the others. At every
 trigger the slot re-rolls a division from {4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16,
 1/32} and waits for it on the Norns clock, so the eight slots drift in and out of
-phase with each other.
+phase with each other. Two options shape this: **division decision** picks
+whether each slot re-rolls its division on every trigger (the default, fully
+shifting) or holds one division per slot until you Randomize (more groove-like);
+**division skew** restricts the pool to short (1/2–1/32), long (4/1–1/1), or the
+full range (default).
 
 **Probability.** At each trigger, play is rolled first and wins over record. If
 play does not fire, record is rolled: an empty slot records fresh, a filled slot
@@ -96,7 +100,6 @@ key reshuffles the whole character while your loops keep playing.
         │                            attack / decay
         │                                   │
         │                                crunch
-        │                                   │
         └─────────────────┬─────────────────┘
                           │
                      master gain
@@ -154,6 +157,8 @@ In PARAMS menu order; all are MIDI-mappable.
 | **output volume** | 50 % | 0–100 % |
 | **record probability** | 0 % | 0–100 % |
 | **play probability** | 0 % | 0–100 % |
+| **division decision** | on play | on play / on randomize |
+| **division skew** | full range | short / long / full range |
 | **sample attack** | 0 % | 0–100 % |
 | **sample decay** | 0 % | 0–100 % |
 | **resample** | no | no / yes |
