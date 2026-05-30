@@ -181,6 +181,13 @@ local function add_params()
 
   params:add_number("squid_crunch", "crunch amount", 0, 100, 25, pct)
   params:set_action("squid_crunch", function(v) engine.crunch(v) end)
+
+  params:add_trigger("squid_trig_clear", "t: clear")
+  params:set_action("squid_trig_clear", function() clear_all() end)
+  params:add_trigger("squid_trig_shield", "t: shield")
+  params:set_action("squid_trig_shield", function() record_shield = not record_shield end)
+  params:add_trigger("squid_trig_randomize", "t: randomize")
+  params:set_action("squid_trig_randomize", function() randomize() end)
 end
 
 -- =========================================================================
