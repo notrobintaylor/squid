@@ -2,8 +2,8 @@
 
 ### A generative, clock-locked sampler for Monome Norns
 
-squid is an eight-slot sampler for Monome Norns, built in the spirit of the ALM
-Squid Salmple. It records from the inputs and replays what it captures on its
+squid is an eight-slot sampler for Monome Norns, built in the spirit of the
+[ALM Squid Salmple](https://busycircuits.com/pages/alm022). It records from the inputs and replays what it captures on its
 own terms: each of the eight slots is permanently bound to a random effect, each
 runs its own clock-synced loop, and each playback is scattered across the stereo
 field and the spectrum before passing through a fixed lo-fi colour. You never
@@ -13,7 +13,7 @@ rest.
 Plug audio into the inputs. squid samples live in only.
 
 The character is emergent. At launch each slot draws one of eight effects, used
-once each, and hides the assignment. Every time a slot plays, that fixed effect
+once each, and the GUI shows the assignment. Every time a slot plays, that fixed effect
 is stacked with a fresh random bandpass and stereo position, then run through the
 crunch that sits on the playback bus. Randomize reshuffles which effect
 lives on which slot. squid is purely rhythmic — it does nothing without a running
@@ -30,9 +30,8 @@ cleared, but its length and content persist until you clear all buffers.
 one-to-one across the slots: **pitch −12** and **pitch +12** (an octave down and
 up, length preserved), **half speed** and **double speed** (rate and pitch
 together), **forward** and **reverse**, **low cut** and **high cut** (high- and
-low-pass around 250 Hz). Each is used exactly once. The assignment is never shown
-in a way that tells you which slot holds which effect — until you ask the effect
-row to reveal it (see Screen).
+low-pass around 250 Hz). Each is used exactly once. The current assignment is shown in the GUI's effect
+row (see Screen).
 
 **Triggering.** Each slot runs its own loop, independent of the others. At every
 trigger the slot re-rolls a division from {4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16,
@@ -47,7 +46,7 @@ buffer. Playing an empty slot returns silence — no fallback, no skip.
 **Record shield.** A global latch. While engaged, slots keep playing but are
 never recorded into or overdubbed — the buffers are frozen as they are.
 
-**Spatial scatter.** Inspired by the ALM Jumble Henge. Every playback draws a
+**Spatial scatter.** Inspired by the [ALM Jumble Henge](https://busycircuits.com/pages/alm029). Every playback draws a
 cell from a four-band by five-position matrix: a bandpass (20–249, 250–999,
 1000–2499, or 2500–9999 Hz) and a stereo balance (hard left, slight left, centre,
 slight right, hard right). The cell is fixed for the duration of that play and
@@ -67,10 +66,10 @@ path stays clean; the feedback is one block delayed so the loop stays stable.
 
 **Crunch.** A lo-fi colour on the slot-playback bus — sample-rate reduction,
 bit-quantize, and a little noise. The live input passes through clean; only the
-sampled voices wear the grit. It is inspired by 12-bit hardware samplers of the
-Akai S950 era — where the character comes from the converters, the anti-alias
-filtering, and rate-based aliasing — but it is a loose evocation, not an exact
-emulation. Adjust it with the **crunch amount** parameter: the default is the
+sampled voices wear the grit. It is inspired by 12-bit hardware samplers like
+the [Akai S900 and S950](https://en.wikipedia.org/wiki/Akai_S900) — where the
+character comes from the converters, the anti-alias filtering, and rate-based
+aliasing — but it is a loose evocation, not an exact emulation. Adjust it with the **crunch amount** parameter: the default is the
 original baked-in colour, 0 is near-clean, 100 is heavy.
 
 **Randomize.** Re-rolls the effect-to-slot assignment without touching the
@@ -80,30 +79,30 @@ key reshuffles the whole character while your loops keep playing.
 ## Signal flow
 
 ```
-                      stereo IN
+                      audio IN
                           │
         ┌─────────────────┴─────────────────┐
         │                                   │
-        │                            record / overdub
+   dry (clean)                      record / overdub
         │                                   │
-        │                              slot buffers
+        │                             slot buffers
         │                                   │
-        │                                  play
+        │                                 play
         │                                   │
-   dry (clean)                         slot effect
+        │                              slot effect
         │                                   │
-        │                           bandpass + balance
+        │                          bandpass + balance
         │                                   │
-        │                             attack / decay
+        │                            attack / decay
         │                                   │
-        │                                 crunch
+        │                                crunch
         └─────────────────┬─────────────────┘
                           │
-                    output volume
+                     master gain
                           │
         ┌─────────────────┼─────────────────┐
         │                 │                 │
-     stereo OUT        ~sendA            ~sendB
+     OUT L/R           ~sendA            ~sendB
 ```
 
 The live input is monitored clean and summed with the sampled voices. Record and
@@ -159,11 +158,16 @@ In PARAMS menu order; all are MIDI-mappable.
 | **resample** | no | no / yes |
 | **resample amount** | 0 % | 0–100 % |
 | **crunch amount** | 25 % | 0–100 % |
+| **t: clear** | — | trigger |
+| **t: shield** | — | trigger |
+| **t: randomize** | — | trigger |
 
 Output volume, record probability and play probability mirror the three encoders
 (E1/E2/E3). Record and play default to 0 % so squid starts silent and waits for
 you. Sample attack/decay are a fraction of each voice's play length. Crunch
-defaults to the original baked-in colour (0 % near-clean, 100 % heavy).
+defaults to the original baked-in colour (0 % near-clean, 100 % heavy). The three
+trigger entries mirror the K1/K2/K3 actions for MIDI mapping — send a CC ≥ 64 to
+fire.
 
 ## Synchronization
 
