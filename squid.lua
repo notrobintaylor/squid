@@ -9,8 +9,16 @@ local OX, OY = sprite.origin.x, sprite.origin.y
 
 local NUM_SLOTS = 8
 
--- division pool (beats): 4/1, 2/1, 1/1, 1/2, 1/4, 1/8, 1/16, 1/32 (1/1 = one bar)
-local DIV_BEATS = {16, 8, 4, 2, 1, 0.5, 0.25, 0.125}
+-- division pools (beats), indexed by squid_skew (1 = short, 2 = long, 3 = full).
+-- Split at 1/1 (1/1 belongs to long):
+--   long  = 4/1, 2/1, 1/1
+--   short = 1/2, 1/4, 1/8, 1/16, 1/32
+--   full  = all eight (1/1 = one bar)
+local SKEW_DIVS = {
+  {2, 1, 0.5, 0.25, 0.125},
+  {16, 8, 4},
+  {16, 8, 4, 2, 1, 0.5, 0.25, 0.125},
+}
 
 -- slot status -> glyph name + brightness
 local STATE_GLYPH = { play = "p", rec = "r", idle = "angle", empty = "x" }
@@ -25,6 +33,8 @@ local redraw_clock = nil
 local slot_fx = {}
 -- slot_filled[i]: false = empty (record fresh), true = has content (overdub)
 local slot_filled = {}
+-- slot_div[i]: per-slot fixed division (beats) when squid_div_decision = "on randomize"
+local slot_div = {}
 -- slot_len[i]: last recorded length in seconds (used to time the play glyph)
 local slot_len = {}
 -- slot_state[i]: empty / idle / play / rec
@@ -62,6 +72,21 @@ local function update_slot_states()
 end
 
 -- =========================================================================
+-- divisions
+-- =========================================================================
+
+local function pick_div()
+  local divs = SKEW_DIVS[params:get("squid_skew")]
+  return divs[math.random(#divs)]
+end
+
+local function reroll_slot_divs()
+  for i = 1, NUM_SLOTS do
+    slot_div[i] = pick_div()
+  end
+end
+
+-- =========================================================================
 -- effect assignment
 -- =========================================================================
 
@@ -78,6 +103,7 @@ local function randomize()
     perm[i], perm[j] = perm[j], perm[i]
   end
   slot_fx = perm
+  reroll_slot_divs()
   if engine_ready then push_assignments() end
 end
 
@@ -107,7 +133,12 @@ end
 
 local function slot_loop(slot)
   while true do
-    local beats = DIV_BEATS[math.random(NUM_SLOTS)]
+    local beats
+    if params:get("squid_div_decision") == 2 then
+      beats = slot_div[slot]
+    else
+      beats = pick_div()
+    end
     clock.sync(beats)
     fire_trigger(slot, beats)
   end
@@ -168,6 +199,10 @@ local function add_params()
 
   params:add_number("squid_rec_prob", "record probability", 0, 100, 0, pct)
   params:add_number("squid_play_prob", "play probability", 0, 100, 0, pct)
+
+  params:add_option("squid_div_decision", "division decision", {"on play", "on randomize"}, 1)
+  params:add_option("squid_skew", "division skew", {"short", "long", "full range"}, 3)
+  params:set_action("squid_skew", reroll_slot_divs)
 
   params:add_number("squid_attack", "sample attack", 0, 100, 0, pct)
   params:set_action("squid_attack", function(v) engine.attack(v / 100) end)
