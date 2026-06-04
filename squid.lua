@@ -20,7 +20,6 @@ local SKEW_DIVS = {
   {16, 8, 4, 2, 1, 0.5, 0.25, 0.125},
 }
 
--- slot status -> glyph name + brightness
 local STATE_GLYPH = { play = "p", rec = "r", idle = "angle", empty = "x" }
 local STATE_LEVEL = { play = 15, rec = 15, idle = 5, empty = 5 }
 
@@ -217,12 +216,12 @@ local function add_params()
   params:add_number("squid_crunch", "crunch amount", 0, 100, 25, pct)
   params:set_action("squid_crunch", function(v) engine.crunch(v) end)
 
-  params:add_trigger("squid_trig_clear", "t: clear")
-  params:set_action("squid_trig_clear", function() clear_all() end)
-  params:add_trigger("squid_trig_shield", "t: shield")
-  params:set_action("squid_trig_shield", function() record_shield = not record_shield end)
-  params:add_trigger("squid_trig_randomize", "t: randomize")
-  params:set_action("squid_trig_randomize", function() randomize() end)
+  params:add_binary("squid_trig_clear", "t: clear", "trigger", 0)
+  params:set_action("squid_trig_clear", function(v) if v == 1 then clear_all() end end)
+  params:add_binary("squid_trig_shield", "t: shield", "trigger", 0)
+  params:set_action("squid_trig_shield", function(v) if v == 1 then record_shield = not record_shield end end)
+  params:add_binary("squid_trig_randomize", "t: randomize", "trigger", 0)
+  params:set_action("squid_trig_randomize", function(v) if v == 1 then randomize() end end)
 end
 
 -- =========================================================================
@@ -310,12 +309,10 @@ function redraw()
   update_slot_states()
   screen.clear()
 
-  -- static base
   screen.level(5)
   draw_pixels(sprite.static_base, 0, 0)
   screen.fill()
 
-  -- record shield
   screen.level(record_shield and 15 or 5)
   draw_pixels(sprite.shield, 0, 0)
   screen.fill()
