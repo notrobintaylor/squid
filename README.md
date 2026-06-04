@@ -100,6 +100,7 @@ key reshuffles the whole character while your loops keep playing.
         │                            attack / decay
         │                                   │
         │                                crunch
+        │                                   │
         └─────────────────┬─────────────────┘
                           │
                      master gain
