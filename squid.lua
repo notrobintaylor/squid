@@ -9,11 +9,6 @@ local OX, OY = sprite.origin.x, sprite.origin.y
 
 local NUM_SLOTS = 8
 
--- division pools (beats), indexed by squid_skew (1 = short, 2 = long, 3 = full).
--- Split at 1/1 (1/1 belongs to long):
---   long  = 4/1, 2/1, 1/1
---   short = 1/2, 1/4, 1/8, 1/16, 1/32
---   full  = all eight (1/1 = one bar)
 local SKEW_DIVS = {
   {2, 1, 0.5, 0.25, 0.125},
   {16, 8, 4},
@@ -28,19 +23,12 @@ local record_shield = false
 local k1_clock = nil
 local redraw_clock = nil
 
--- slot_fx[i]: effect id (1-8) assigned to slot i; each id used once
 local slot_fx = {}
--- slot_filled[i]: false = empty (record fresh), true = has content (overdub)
 local slot_filled = {}
--- slot_div[i]: per-slot fixed division (beats) when squid_div_decision = "on randomize"
 local slot_div = {}
--- slot_len[i]: last recorded length in seconds (used to time the play glyph)
 local slot_len = {}
--- slot_state[i]: empty / idle / play / rec
 local slot_state = {}
--- slot_until[i]: util.time() at which a play/rec glyph reverts to idle/empty
 local slot_until = {}
--- slot_clocks[i]: clock id of slot i's trigger loop
 local slot_clocks = {}
 
 -- =========================================================================
@@ -51,10 +39,6 @@ local function revert_target(slot)
   return slot_filled[slot] and "idle" or "empty"
 end
 
--- A play/rec glyph holds until slot_until, then reverts. We use a timestamp
--- checked each redraw frame, not a per-trigger clock: spawning and cancelling a
--- clock on every trigger raced the scheduler into resuming a cancelled coroutine
--- (clock.lua "thread expected").
 local function set_slot_state(slot, st, dur)
   slot_state[slot] = st
   slot_until[slot] = util.time() + dur
@@ -274,7 +258,6 @@ function enc(n, d)
 end
 
 function key(n, z)
-  -- K1: norns reserves a short tap for its menu, so clear fires only on a 2 s hold
   if n == 1 then
     if z == 1 then
       k1_clock = clock.run(function()
@@ -317,7 +300,6 @@ function redraw()
   draw_pixels(sprite.shield, 0, 0)
   screen.fill()
 
-  -- param bars (output / rec / play), filled portion only
   screen.level(5)
   for pi = 1, 3 do
     local bar = sprite.param_bars[pi]
@@ -328,7 +310,6 @@ function redraw()
   end
   screen.fill()
 
-  -- slot status glyphs, batched by brightness
   for _, lv in ipairs({15, 5}) do
     screen.level(lv)
     for s = 1, NUM_SLOTS do
@@ -341,7 +322,6 @@ function redraw()
     screen.fill()
   end
 
-  -- effect per slot, column-aligned under the status row (level 5)
   screen.level(5)
   for s = 1, NUM_SLOTS do
     local g = sprite.effect_glyphs[slot_fx[s]]
