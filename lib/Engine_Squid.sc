@@ -15,10 +15,6 @@ Engine_Squid : CroneEngine {
 	var resampleAmt;
 
 	// ---- EFFECT DISPATCH ----
-	// fx ids agree with the Lua side: 1 pitch-12, 2 pitch+12, 3 speed0.5,
-	// 4 speed2.0, 5 forward, 6 reverse, 7 low cut (HPF), 8 high cut (LPF).
-	// every play also draws a random cell from the 4-band x 5-pan scatter
-	// matrix; the cell is fixed for the one-shot's life, re-rolled per play.
 	prPlay { |slot|
 		var frames = recFrames[slot];
 		var fx = slotFx[slot];
@@ -60,15 +56,12 @@ Engine_Squid : CroneEngine {
 		resampleAmt = 0;
 
 		// ---- SPATIAL SCATTER ----
-		// per-play bandpass (HPF->LPF edges) + stereo balance placement
 		voicePost = { |sig, bandLo, bandHi, pan|
 			var banded = LPF.ar(HPF.ar(sig, bandLo), bandHi);
 			Balance2.ar(banded[0], banded[1], pan);
 		};
 
 		// ---- AMP ENVELOPE ----
-		// attack/decay as a fraction of the play duration, so the fade scales
-		// with each loop's division; scaled down if they would exceed the loop.
 		ampEnv = { |atk, dcy, dur|
 			var atkT = atk * dur;
 			var dcyT = dcy * dur;
@@ -85,8 +78,6 @@ Engine_Squid : CroneEngine {
 			var dry = In.ar(dryIn, 2);
 			var chip = In.ar(slotIn, 2);
 			// ---- CHIP DSP ----
-			// crunch 0-100 maps to princeton chip_dsp amt (crush 0): 25 = the
-			// original baked colour, 0 ~ clean, 100 heavy
 			var c = crunch.clip(0, 100);
 			var sr = c.linexp(0, 100, 24000, 4500);
 			var step = c.linlin(0, 100, 0.00001, 0.05);
@@ -98,16 +89,11 @@ Engine_Squid : CroneEngine {
 			sig = (dry + chip) * amp;
 			Out.ar(out, sig);
 			// ---- FX MOD SEND BUSES ----
-			// mirror the output to the fx-mod send buses when the framework set
-			// them; ~sendA/~sendB are read at SynthDef build time, so the mod must
-			// be active when squid's engine loads
 			if(~sendA.notNil) { Out.ar(~sendA, sig) };
 			if(~sendB.notNil) { Out.ar(~sendB, sig) };
 		}).add;
 
 		SynthDef(\squid_rec, { |buf = 0, in = 0, dur = 1, preLevel = 0, fbIn = 0, fbAmt = 0|
-			// resample: fold the (one-block-delayed) slot playback into the record
-			// source so new takes capture the loops that are currently playing
 			var sig = In.ar(in, 2) + (InFeedback.ar(fbIn, 2) * fbAmt);
 			EnvGen.kr(Env.linen(0, dur, 0), doneAction: 2);
 			RecordBuf.ar(sig, buf, 0, 1, preLevel, run: 1, loop: 0, doneAction: 0);
