@@ -65,12 +65,11 @@ envelope becomes a triangle peaking mid-loop.
 
 **Resample.** Output folded back to input. With **resample** on and **resample
 amount** up, the currently-playing loops are mixed into the record source, so new
-takes capture them — loops recirculate and layer over generations. The live dry
-path stays clean; the feedback is one block delayed so the loop stays stable.
+takes capture them — loops recirculate and layer over generations. The feedback
+is one block delayed so the loop stays stable.
 
 **Crunch.** A lo-fi colour on the slot-playback bus — sample-rate reduction,
-bit-quantize, and a little noise. The live input passes through clean; only the
-sampled voices wear the grit. It is inspired by 12-bit hardware samplers like
+bit-quantize, and a little noise. Only the sampled voices wear the grit. It is inspired by 12-bit hardware samplers like
 the [Akai S900 and S950](https://en.wikipedia.org/wiki/Akai_S900) — where the
 character comes from the converters, the anti-alias filtering, and rate-based
 aliasing — but it is a loose evocation, not an exact emulation. Adjust it with the **crunch amount** parameter: the default is the
@@ -85,23 +84,19 @@ key reshuffles the whole character while your loops keep playing.
 ```
                       audio IN
                           │
-        ┌─────────────────┴─────────────────┐
-        │                                   │
-   dry (clean)                      record / overdub
-        │                                   │
-        │                             slot buffers
-        │                                   │
-        │                                 play
-        │                                   │
-        │                              slot effect
-        │                                   │
-        │                          bandpass + balance
-        │                                   │
-        │                            attack / decay
-        │                                   │
-        │                                crunch
-        │                                   │
-        └─────────────────┬─────────────────┘
+                  record / overdub
+                          │
+                    slot buffers
+                          │
+                        play
+                          │
+                     slot effect
+                          │
+                 bandpass + balance
+                          │
+                   attack / decay
+                          │
+                       crunch
                           │
                      master gain
                           │
@@ -110,11 +105,12 @@ key reshuffles the whole character while your loops keep playing.
      OUT L/R           ~sendA            ~sendB
 ```
 
-The live input is monitored clean and summed with the sampled voices. Record and
-overdub capture from the input — and, with resample up, the playing loops folded
-back in. Play routes a slot through its fixed effect, then the per-play scatter,
-then its attack/decay envelope, then the shared crunch on the way to the sum.
-Output volume scales the whole mix.
+squid outputs only its sampled voices — the live input itself is not monitored
+through the script. Record and overdub capture from the input (and, with resample
+up, fold the playing loops back in). Play routes a slot through its fixed effect,
+then the per-play scatter, then its attack/decay envelope, then the shared crunch
+on the way to the output. Output volume scales the whole mix. If you want to hear
+the live signal alongside the loops, enable Norns' system input monitor.
 
 squid also works with fx mods: its output is mirrored to the fx-mod send buses, so
 it can act as a stereo source for them. Enable the mod (mods load before scripts,
