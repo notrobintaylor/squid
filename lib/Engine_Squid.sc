@@ -5,6 +5,9 @@ Engine_Squid : CroneEngine {
 	var sr;
 	var inputBus;
 	var slotPlayBus;
+	var slotBus;
+	var slotGain;
+	var playGroup;
 	var slotBufs;
 	var slotFx;
 	var recFrames;
@@ -15,26 +18,27 @@ Engine_Squid : CroneEngine {
 	var resampleAmt;
 
 	// ---- EFFECT DISPATCH ----
-	prPlay { |slot|
+	prPlay { |slot, bandIdx, panIdx|
 		var frames = recFrames[slot];
 		var fx = slotFx[slot];
 		var buf = slotBufs[slot].bufnum;
-		var out = slotPlayBus.index;
+		var out = slotBus[slot].index;
 		var len = frames / sr;
-		var bands = [[20, 249], [250, 999], [1000, 2499], [2500, 9999]];
+		// 3-band x 5-pan scatter; band/pan chosen in Lua, passed as 0-based index
+		var bands = [[20, 499], [500, 1999], [2000, 9999]];
 		var pans = [-1.0, -0.5, 0.0, 0.5, 1.0];
-		var band = bands.choose;
-		var spatial = [\bandLo, band[0], \bandHi, band[1], \pan, pans.choose, \atk, attack, \dcy, decay];
+		var band = bands[bandIdx];
+		var spatial = [\bandLo, band[0], \bandHi, band[1], \pan, pans[panIdx], \atk, attack, \dcy, decay];
 		if(frames <= 0, { ^nil });
 		switch(fx,
-			1, { Synth(\squid_play_pitch, [\buf, buf, \out, out, \pitchRatio, 0.5, \dur, len] ++ spatial, outputSynth, \addBefore); },
-			2, { Synth(\squid_play_pitch, [\buf, buf, \out, out, \pitchRatio, 2.0, \dur, len] ++ spatial, outputSynth, \addBefore); },
-			3, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 0.5,  \startPos, 0, \dur, len / 0.5] ++ spatial, outputSynth, \addBefore); },
-			4, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 2.0,  \startPos, 0, \dur, len / 2.0] ++ spatial, outputSynth, \addBefore); },
-			5, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 1.0,  \startPos, 0, \dur, len] ++ spatial, outputSynth, \addBefore); },
-			6, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, -1.0, \startPos, frames - 1, \dur, len] ++ spatial, outputSynth, \addBefore); },
-			7, { Synth(\squid_play_hpf,   [\buf, buf, \out, out, \freq, 250, \dur, len] ++ spatial, outputSynth, \addBefore); },
-			8, { Synth(\squid_play_lpf,   [\buf, buf, \out, out, \freq, 250, \dur, len] ++ spatial, outputSynth, \addBefore); }
+			1, { Synth(\squid_play_pitch, [\buf, buf, \out, out, \pitchRatio, 0.5, \dur, len] ++ spatial, playGroup, \addToHead); },
+			2, { Synth(\squid_play_pitch, [\buf, buf, \out, out, \pitchRatio, 2.0, \dur, len] ++ spatial, playGroup, \addToHead); },
+			3, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 0.5,  \startPos, 0, \dur, len / 0.5] ++ spatial, playGroup, \addToHead); },
+			4, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 2.0,  \startPos, 0, \dur, len / 2.0] ++ spatial, playGroup, \addToHead); },
+			5, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, 1.0,  \startPos, 0, \dur, len] ++ spatial, playGroup, \addToHead); },
+			6, { Synth(\squid_play_rate,  [\buf, buf, \out, out, \rate, -1.0, \startPos, frames - 1, \dur, len] ++ spatial, playGroup, \addToHead); },
+			7, { Synth(\squid_play_hpf,   [\buf, buf, \out, out, \freq, 250, \dur, len] ++ spatial, playGroup, \addToHead); },
+			8, { Synth(\squid_play_lpf,   [\buf, buf, \out, out, \freq, 250, \dur, len] ++ spatial, playGroup, \addToHead); }
 		);
 	}
 
@@ -46,6 +50,7 @@ Engine_Squid : CroneEngine {
 		// ---- BUSES ----
 		inputBus = Bus.audio(context.server, 2);
 		slotPlayBus = Bus.audio(context.server, 2);
+		slotBus = Array.fill(8, { Bus.audio(context.server, 2) });
 
 		// ---- BUFFERS / STATE ----
 		slotBufs = Array.fill(8, { Buffer.alloc(context.server, (sr * 8).asInteger, 2) });
@@ -74,8 +79,7 @@ Engine_Squid : CroneEngine {
 			Out.ar(out, [In.ar(inL, 1), In.ar(inR, 1)]);
 		}).add;
 
-		SynthDef(\squid_output, { |dryIn = 0, slotIn = 0, out = 0, amp = 0.5, crunch = 25|
-			var dry = In.ar(dryIn, 2);
+		SynthDef(\squid_output, { |slotIn = 0, out = 0, amp = 0.5, crunch = 25|
 			var chip = In.ar(slotIn, 2);
 			// ---- CHIP DSP ----
 			var c = crunch.clip(0, 100);
@@ -85,8 +89,8 @@ Engine_Squid : CroneEngine {
 			var sig;
 			chip = Latch.ar(chip, Impulse.ar(sr));
 			chip = (chip / step).round(1.0) * step;
-			chip = chip + (LFNoise0.ar(48000) * noiseAmt);
-			sig = (dry + chip) * amp;
+			chip = chip + (LFNoise0.ar(8000) * noiseAmt);
+			sig = chip * amp;
 			Out.ar(out, sig);
 			// ---- FX MOD SEND BUSES ----
 			if(~sendA.notNil) { Out.ar(~sendA, sig) };
@@ -105,7 +109,7 @@ Engine_Squid : CroneEngine {
 		}).add;
 
 		SynthDef(\squid_play_pitch, { |buf = 0, out = 0, pitchRatio = 1, amp = 1, dur = 1, bandLo = 20, bandHi = 20000, pan = 0, atk = 0, dcy = 0|
-			var sig = PitchShift.ar(PlayBuf.ar(2, buf, 1, startPos: 0, loop: 0), 0.2, pitchRatio, 0, 0);
+			var sig = PitchShift.ar(PlayBuf.ar(2, buf, 1, startPos: 0, loop: 0), 0.1, pitchRatio, 0, 0);
 			Out.ar(out, voicePost.(sig, bandLo, bandHi, pan) * ampEnv.(atk, dcy, dur) * amp);
 		}).add;
 
@@ -119,21 +123,33 @@ Engine_Squid : CroneEngine {
 			Out.ar(out, voicePost.(sig, bandLo, bandHi, pan) * ampEnv.(atk, dcy, dur) * amp);
 		}).add;
 
+		// per-slot gain stage: level/mute applied here (Lag = clickless)
+		SynthDef(\squid_slotgain, { |in = 0, out = 0, amp = 1|
+			Out.ar(out, In.ar(in, 2) * Lag.kr(amp, 0.02));
+		}).add;
+
 		context.server.sync;
 
 		slotBufs.do { |b, i|
 			("squid buf " ++ i ++ ": " ++ b.numFrames ++ " frames, " ++ b.numChannels ++ " ch").postln;
 		};
 
-		// ---- SYNTHS ----
+		// ---- SYNTHS ----  order: input -> plays -> gains -> output
 		inputSynth = Synth.head(context.xg, \squid_input, [
 			\inL, context.in_b[0].index,
 			\inR, context.in_b[1].index,
 			\out, inputBus.index
 		]);
 
+		playGroup = Group.tail(context.xg);
+
+		slotGain = Array.fill(8, { |i|
+			Synth.tail(context.xg, \squid_slotgain, [
+				\in, slotBus[i].index, \out, slotPlayBus.index, \amp, 1
+			]);
+		});
+
 		outputSynth = Synth.tail(context.xg, \squid_output, [
-			\dryIn, inputBus.index,
 			\slotIn, slotPlayBus.index,
 			\out, context.out_b.index
 		]);
@@ -141,6 +157,10 @@ Engine_Squid : CroneEngine {
 		// ---- COMMANDS ----
 		this.addCommand(\output, "f", { |msg|
 			outputSynth.set(\amp, msg[1]);
+		});
+
+		this.addCommand(\slot_amp, "if", { |msg|
+			slotGain[msg[1]].set(\amp, msg[2]);
 		});
 
 		this.addCommand(\crunch, "f", { |msg|
@@ -179,8 +199,8 @@ Engine_Squid : CroneEngine {
 			recFrames[msg[1]] = min((msg[2] * sr).asInteger, slotBufs[msg[1]].numFrames);
 		});
 
-		this.addCommand(\play, "i", { |msg|
-			this.prPlay(msg[1]);
+		this.addCommand(\play, "iii", { |msg|
+			this.prPlay(msg[1], msg[2], msg[3]);
 		});
 
 		this.addCommand(\clear_all, "", { |msg|
@@ -192,8 +212,11 @@ Engine_Squid : CroneEngine {
 	free {
 		inputSynth.free;
 		outputSynth.free;
+		slotGain.do(_.free);
+		playGroup.free;
 		inputBus.free;
 		slotPlayBus.free;
+		slotBus.do(_.free);
 		slotBufs.do(_.free);
 	}
 }
