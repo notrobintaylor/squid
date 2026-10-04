@@ -139,10 +139,13 @@ mute. The eight slots sum, pass through the shared crunch, and output volume sca
 the whole mix. If you want to hear the live signal alongside the loops, enable
 Norns' system input monitor.
 
-squid also works with fx mods: its output is mirrored to the fx-mod send buses, so
+squid also works with the fx mod: its output is mirrored to the fx-mod send buses, so
 it can act as a stereo source for them. Enable the mod (mods load before scripts,
-so it must be active when squid loads) and squid feeds its sends automatically;
-with no mod active there is no send and no overhead.
+so it must be active when squid loads) and squid feeds its sends automatically; it
+works with any version of the fx mod, no patch needed. If the mod's send bus overlaps
+the norns input or output, squid gives the mod its own free bus while it runs and
+hands the original back on exit. The log shows one line per send ("squid: fx send A
+-> bus ..."). With no mod active the sends go nowhere.
 
 ## Controls
 

@@ -1,5 +1,3 @@
-// see README.md
-
 Engine_Squid : CroneEngine {
 
 	var sr;
@@ -16,6 +14,8 @@ Engine_Squid : CroneEngine {
 	var attack;
 	var decay;
 	var resampleAmt;
+	var sendDummyBus;
+	var sendOwnBuses;
 
 	// ---- EFFECT DISPATCH ----
 	prPlay { |slot, bandIdx, panIdx|
@@ -24,7 +24,6 @@ Engine_Squid : CroneEngine {
 		var buf = slotBufs[slot].bufnum;
 		var out = slotBus[slot].index;
 		var len = frames / sr;
-		// 3-band x 5-pan scatter; band/pan chosen in Lua, passed as 0-based index
 		var bands = [[20, 499], [500, 1999], [2000, 9999]];
 		var pans = [-1.0, -0.5, 0.0, 0.5, 1.0];
 		var band = bands[bandIdx];
@@ -79,7 +78,7 @@ Engine_Squid : CroneEngine {
 			Out.ar(out, [In.ar(inL, 1), In.ar(inR, 1)]);
 		}).add;
 
-		SynthDef(\squid_output, { |slotIn = 0, out = 0, amp = 0.5, crunch = 25|
+		SynthDef(\squid_output, { |slotIn = 0, out = 0, amp = 0.5, crunch = 25, sendA = 0, sendB = 0|
 			var chip = In.ar(slotIn, 2);
 			// ---- CHIP DSP ----
 			var c = crunch.clip(0, 100);
@@ -93,8 +92,8 @@ Engine_Squid : CroneEngine {
 			sig = chip * amp;
 			Out.ar(out, sig);
 			// ---- FX MOD SEND BUSES ----
-			if(~sendA.notNil) { Out.ar(~sendA, sig) };
-			if(~sendB.notNil) { Out.ar(~sendB, sig) };
+			ReplaceOut.ar(sendA, sig);
+			ReplaceOut.ar(sendB, sig);
 		}).add;
 
 		SynthDef(\squid_rec, { |buf = 0, in = 0, dur = 1, preLevel = 0, fbIn = 0, fbAmt = 0|
@@ -123,7 +122,6 @@ Engine_Squid : CroneEngine {
 			Out.ar(out, voicePost.(sig, bandLo, bandHi, pan) * ampEnv.(atk, dcy, dur) * amp);
 		}).add;
 
-		// per-slot gain stage: level/mute applied here (Lag = clickless)
 		SynthDef(\squid_slotgain, { |in = 0, out = 0, amp = 1|
 			Out.ar(out, In.ar(in, 2) * Lag.kr(amp, 0.02));
 		}).add;
@@ -134,7 +132,7 @@ Engine_Squid : CroneEngine {
 			("squid buf " ++ i ++ ": " ++ b.numFrames ++ " frames, " ++ b.numChannels ++ " ch").postln;
 		};
 
-		// ---- SYNTHS ----  order: input -> plays -> gains -> output
+		// ---- SYNTHS ----
 		inputSynth = Synth.head(context.xg, \squid_input, [
 			\inL, context.in_b[0].index,
 			\inR, context.in_b[1].index,
@@ -149,12 +147,34 @@ Engine_Squid : CroneEngine {
 			]);
 		});
 
+		sendDummyBus = Bus.audio(context.server, 2);
+		sendOwnBuses = [];
 		outputSynth = Synth.tail(context.xg, \squid_output, [
 			\slotIn, slotPlayBus.index,
-			\out, context.out_b.index
+			\out, context.out_b.index,
+			\sendA, sendDummyBus.index,
+			\sendB, sendDummyBus.index
 		]);
 
 		// ---- COMMANDS ----
+		this.addCommand(\fx_attach, "", {
+			var hw = [context.in_b[0].index, context.in_b[1].index, context.out_b.index, context.out_b.index + 1];
+			var attach = { |key, name|
+				var bus = topEnvironment[key];
+				var i = if(bus.isNil) { nil } { if(bus.isKindOf(Bus)) { bus.index } { bus.asInteger } };
+				case
+				{ i.isNil } { ("squid: fx % - no fx mod found, send rests".format(name)).postln; sendDummyBus.index }
+				{ [i, i + 1].sect(hw).notEmpty } {
+					var own = Bus.audio(context.server, 2);
+					sendOwnBuses = sendOwnBuses.add([key, bus, own]);
+					topEnvironment[key] = own;
+					("squid: fx % - the fx mod's bus % overlaps the norns input/output, its plugins read bus % while squid runs".format(name, i, own.index)).postln;
+					own.index }
+				{ ("squid: fx % -> bus %".format(name, i)).postln; i }
+			};
+			outputSynth.set(\sendA, attach.(\sendA, "send A"), \sendB, attach.(\sendB, "send B"));
+		});
+
 		this.addCommand(\output, "f", { |msg|
 			outputSynth.set(\amp, msg[1]);
 		});
@@ -218,5 +238,7 @@ Engine_Squid : CroneEngine {
 		slotPlayBus.free;
 		slotBus.do(_.free);
 		slotBufs.do(_.free);
+		sendDummyBus.free;
+		sendOwnBuses.do { |e| topEnvironment[e[0]] = e[1]; e[2].free };
 	}
 }

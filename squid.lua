@@ -11,11 +11,8 @@ local NUM_SLOTS = 8
 local NUM_BANDS = 3
 local NUM_PANS = 5
 
--- full division spectrum (beats), slowest -> fastest; range bounded by the
--- 8 s buffer over 20-300 BPM (see session notes). skew biases selection
--- toward one end but never excludes the other
 local DIV_SPECTRUM = { 32, 16, 8, 4, 2, 1, 0.5, 0.25, 0.125, 0.0625 }
-local DIV_TILT = 0.5   -- +/- weighting at the ends; short favors fast, long slow
+local DIV_TILT = 0.5
 
 local STATE_GLYPH = { play = "p", rec = "r", idle = "angle", empty = "x" }
 local STATE_LEVEL = { play = 15, rec = 15, idle = 5, empty = 5 }
@@ -25,8 +22,8 @@ local record_shield = false
 local k1_clock = nil
 local redraw_clock = nil
 
-local in_amp = { l = 0, r = 0 }      -- live Norns input amplitude (L/R)
-local meter_disp = { l = 0, r = 0 }  -- meter ballistics: fast attack, slow release
+local in_amp = { l = 0, r = 0 }
+local meter_disp = { l = 0, r = 0 }
 local in_polls = {}
 
 local slot_fx = {}
@@ -69,21 +66,18 @@ end
 -- divisions
 -- =========================================================================
 
--- per-skew weight over DIV_SPECTRUM: short tilts toward fast, long toward
--- slow, full range stays flat. linear, +/-DIV_TILT at the two ends
 local function div_weights()
   local skew = params:get("squid_skew")
   local s = (skew == 1) and 1 or (skew == 2) and -1 or 0
   local n = #DIV_SPECTRUM
   local w = {}
   for i = 1, n do
-    local p = (i - 1) / (n - 1)            -- 0 = slowest, 1 = fastest
+    local p = (i - 1) / (n - 1)
     w[i] = 1 + s * DIV_TILT * (2 * p - 1)
   end
   return w
 end
 
--- weighted pick with replacement; used by the "on play" decision mode
 local function pick_div()
   local w = div_weights()
   local total = 0
@@ -97,9 +91,6 @@ local function pick_div()
   return DIV_SPECTRUM[#DIV_SPECTRUM]
 end
 
--- assign each slot a unique division: weighted draw without replacement, so
--- the skew biases which values appear (and which drop out) without excluding
--- an end; used by the "on randomize" decision mode
 local function reroll_slot_divs()
   local w = div_weights()
   local vals, wts = {}, {}
@@ -129,14 +120,12 @@ local function push_assignments()
   end
 end
 
--- effective per-slot gain: muted -> 0, else the fader level
 local function push_slot_amp(slot)
   if engine_ready then
     engine.slot_amp(slot - 1, slot_muted[slot] and 0 or slot_level[slot])
   end
 end
 
--- assign each slot a unique matrix cell (band, pan), 0-based; never duplicated
 local function reroll_matrix_cells()
   local cells = {}
   for b = 0, NUM_BANDS - 1 do
@@ -170,7 +159,6 @@ end
 -- triggering
 -- =========================================================================
 
--- shared play/record actions (used by the probability loop and manual triggers)
 local function do_play(slot)
   engine.play(slot - 1, slot_band[slot], slot_pan[slot])
   if slot_filled[slot] then set_slot_state(slot, "play", slot_len[slot]) end
@@ -189,7 +177,6 @@ local function do_record(slot, beats)
   set_slot_state(slot, "rec", dur)
 end
 
--- manual trigger: fire now, or sync to the slot's division when quantized
 local function manual_fire(slot, action)
   if params:get("squid_manual_quantize") == 2 then
     clock.run(function()
@@ -367,6 +354,7 @@ function init()
   randomize()
   engine.load("Squid", function()
     engine_ready = true
+    engine.fx_attach()
     params:bang()
     push_assignments()
     start_loops()
@@ -437,14 +425,10 @@ local function fill_rects(rs)
   for _, r in ipairs(rs) do screen.rect(OX + r[1], OY + r[2], r[3], r[4]) end
 end
 
--- input meter column: body @5 up to the peak dash, peak dash @15, above dark.
--- segs ordered bottom -> top; amplitude mapped on a dB scale (input is quiet,
--- linear would barely move). METER_DB_FLOOR..0 dB -> 0..#segs
 local METER_DB_FLOOR = -50
--- meter ballistics as time constants in beats -> they track the BPM
-local METER_ATTACK_BEATS = 0.02   -- rise (small = snappy peaks)
-local METER_RELEASE_BEATS = 1.0   -- fall (larger = more sluggish)
-local REDRAW_DT = 1 / 10          -- redraw period; matches the redraw clock
+local METER_ATTACK_BEATS = 0.02
+local METER_RELEASE_BEATS = 1.0
+local REDRAW_DT = 1 / 10
 
 local function draw_meter(segs, amp)
   local n = 0
@@ -465,7 +449,6 @@ local function draw_meter(segs, amp)
   screen.fill()
 end
 
--- one-pole follower; attack/release time constants given in beats -> BPM-coupled
 local function meter_follow(disp, amp)
   local beats = (amp > disp) and METER_ATTACK_BEATS or METER_RELEASE_BEATS
   local a = 1 - math.exp(-REDRAW_DT / (beats * clock.get_beat_sec()))
@@ -473,7 +456,6 @@ local function meter_follow(disp, amp)
 end
 
 local function draw_fader(f, level, muted)
-  -- frame: bright = active, dim = muted
   screen.level(muted and 5 or 15)
   for x = f.x0, f.x1 do
     screen.rect(OX + x, OY + f.y0, 1, 1)
@@ -484,7 +466,6 @@ local function draw_fader(f, level, muted)
     screen.rect(OX + f.x1, OY + y, 1, 1)
   end
   screen.fill()
-  -- handle: always bright, y follows the level
   screen.level(15)
   local ty = f.y1 - 2 - math.floor(level * 10 + 0.5)
   for x = f.hx0, f.hx1 do
@@ -494,8 +475,6 @@ local function draw_fader(f, level, muted)
   screen.fill()
 end
 
--- R1 status-cell frame: drawn @15 when the slot can record, left dim (chrome @5)
--- when record-shielded. x spans the slot's dividers, y is the R1 cell box
 local R1_Y0, R1_Y1 = 19, 26
 
 local function draw_status_frame(s)
@@ -576,8 +555,6 @@ function redraw()
   end
   screen.fill()
 
-  -- matrix: light each playing slot's cell (never dim, only @15 while playing).
-  -- band 0 (low) -> bottom row, pan 0 (hard left) -> left column
   screen.level(15)
   for s = 1, NUM_SLOTS do
     if slot_state[s] == "play" and not slot_muted[s] then
